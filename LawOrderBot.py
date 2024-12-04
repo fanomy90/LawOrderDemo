@@ -6,6 +6,7 @@ import requests
 import urllib3
 from bs4 import BeautifulSoup
 import datetime
+from urllib.parse import urlencode
 
 # Загрузка переменных окружения из файла .env
 load_dotenv()
@@ -23,14 +24,55 @@ def COMPANYLOOKUP(input):
     response = requests.get(url)
     return response.text
 
-def parse_sudact(data):
-    soup = BeautifulSoup(data, 'html.parser')
+def parse_sudact(input):
+    now = datetime.datetime.now()
+    print(f"{now} начинаем парсить полученные данные из sudact.ru", flush=True)
+    try:
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        headers = {
+            'user-agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.138 Safari/537.36 OPR/68.0.3618.125'
+        }
+        for _ in range(3):
+            try:
+                response = requests.get(input, headers=headers, timeout=20, verify=False)
+                break
+            except RequestException as e:
+                print(f"{now} Ошибка при обращении к сайту sudact: {e}", flush=True)
+                time.sleep(5)
+        else:
+            print(f"{now} Запрос данных с сайта sudact не удался после 3 попыток, проверьте доступность сайта")
+        if response.status_code == 200:
+            print(f"{now} Сайт sudact доступен, начинаем парсить теги")
+            src = response.text
+            soup = BeautifulSoup(src, 'lxml')
+            posts_ul = soup.find("ul", class_='results')
+            if not posts_ul:
+                print(f"{now} Теги ul с классом 'results' не найдены на странице")
+                return
+            posts_li = posts_ul.find_all("li")
+            print(f"{now} Найдено {len(posts_li)} элементов li в ul.results")
+            results= []
+            for post_li in posts_li:
+                link_tag = post_li.find("a")
+                if link_tag:
+                    title = link_tag.get_text(strip=True)
+                    url = "https://sudact.ru" + link_tag['href']
+                    results.append({'title': title, 'url': url})
+            for result in results:
+                print(f"Название: {result['title']}, Ссылка: {result['url']}")
+            return results
+        else:
+            print(f"{now} Код ответа от сайта sudact: {response.status_code}")
+    except Exception as e:
+        print(f"{now} Парсинг данных с сайта sudact.ru завершился с ошибкой: {e}")
+        return
 
-#запрос данных к sudact.ru
-#https://sudact.ru/regular/doc/?regular-txt=Иванов+И.И.&regular-case_doc=&regular-lawchunkinfo=&regular-date_from=&regular-date_to=&regular-workflow_stage=&regular-area=1013&regular-court=&regular-judge=#searchResult
+
+#формирование ссылки для запроса данных
 def sudact(request):
     base_url = "https://sudact.ru/regular/doc/"
     params = {
+        "page": 1,
         "regular-txt": request,
         "regular-case_doc": "",
         "regular-lawchunkinfo": "",
@@ -42,10 +84,14 @@ def sudact(request):
         "regular-judge": ""
     }
     try:
-        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-        response = requests.get(base_url, params=params, verify=False)  # Отключаем проверку SSL
-        response.raise_for_status()
-        return response.text
+        
+        #urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        #response = requests.get(base_url, params=params, verify=False)  # Отключаем проверку SSL
+        #response.raise_for_status()
+        #return response.text
+        query_string = urlencode(params)
+        request_url = f"{base_url}?{query_string}"
+        return request_url
     except requests.exceptions.RequestException as e:
         print(f"Ошибка запроса данных по ФИО: {e}", flush=True)
         return None
@@ -137,14 +183,19 @@ def next_message(message):
             request_fiz = f"{fiz_surname}+{fiz_name}"
             now = datetime.datetime.now()
             print(f"{now} получено имя для запроса: {request_fiz}", flush=True)
-            response = sudact(request_fiz)
+            #response = sudact(request_fiz)
+            response = parse_sudact(sudact(request_fiz))
+            #распарсить полученные данные и вывести в виде сообщений со ссылками на сайт sudact
             print(f"{now} получен ответ от sudact.ru: {response}", flush=True)
-            if response:
-                # bot.send_message(chat_id, f"Результаты запроса для: {full_name}:\n{response}", reply_markup=keyboard_subcategory)
-                #отправка длинного сообщения
-                send_big_message(bot, chat_id, response)
-            else:
-                bot.send_message(chat_id, f"Произошла ошибка при запросе информации по {full_name} к сервису sudact.ru", reply_markup=keyboard_subcategory)
+            bot.send_message(chat_id, f"По запросу {request_fiz} найдены документы:\n\n {response}", reply_markup=keyboard_subcategory)
+
+            # if response:
+            #     # bot.send_message(chat_id, f"Результаты запроса для: {full_name}:\n{response}", reply_markup=keyboard_subcategory)
+            #     #отправка длинного сообщения
+            #     #send_big_message(bot, chat_id, response)
+            #     bot.send_message(chat_id, f"Сформирована ссылка для запроса: {response}", reply_markup=keyboard_subcategory)
+            # else:
+            #     bot.send_message(chat_id, f"Произошла ошибка при запросе информации по {full_name} к сервису sudact.ru", reply_markup=keyboard_subcategory)
         except Exception as e:
             now = datetime.datetime.now()
             print(f"{now} Ошибка при обработке ФИЗ: {e}", flush=True)

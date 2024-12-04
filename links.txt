@@ -1,0 +1,3 @@
+#запрос данных к sudact.ru
+#https://sudact.ru/regular/doc/?regular-txt=Иванов+И.И.&regular-case_doc=&regular-lawchunkinfo=&regular-date_from=&regular-date_to=&regular-workflow_stage=&regular-area=1013&regular-court=&regular-judge=#searchResult
+#https://sudact.ru/regular/doc/?page=3&regular-txt=%D0%98%D0%B2%D0%B0%D0%BD%D0%BE%D0%B2+%D0%98.%D0%98.&regular-case_doc=&regular-lawchunkinfo=&regular-date_from=&regular-date_to=&regular-workflow_stage=&regular-area=1013&regular-court=&regular-judge=#searchResult
