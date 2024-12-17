@@ -10,7 +10,6 @@ from urllib.parse import urlencode
 import time
 from requests.exceptions import RequestException
 
-
 # Загрузка переменных окружения из файла .env
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
@@ -19,12 +18,6 @@ print(f'{now} Загружен токен бота {TOKEN}', flush=True)
 bot = TeleBot(TOKEN)
 
 #Вспомогательные функции
-
-# def COMPANYLOOKUP(input):
-#     response=UrlFetchApp.fetch("https://api.datanewton.ru/v1/counterparty?key=lMqXGnVMQAyn&filters=OWNER_BLOCK%2CADDRESS_BLOCK&inn="+input).getContentText();
-#     return response;
-
-
 def COMPANYLOOKUP(input):
     url = f"https://api.datanewton.ru/v1/counterparty?key=lMqXGnVMQAyn&filters=OWNER_BLOCK%2CADDRESS_BLOCK&inn={input}"
     response = requests.get(url)
@@ -97,14 +90,11 @@ def prepare_message(input):
     # соединим все сообщения в одно с разделителями
     message_text = ''.join(message)
     return message_text
-
-
-
 #формирование ссылки для запроса данных
-def sudact(request):
+def sudact(request, page=1):
     base_url = "https://sudact.ru/regular/doc/"
     params = {
-        "page": 1,
+        "page": page,
         "regular-txt": request,
         "regular-case_doc": "",
         "regular-lawchunkinfo": "",
@@ -117,41 +107,16 @@ def sudact(request):
         "regular-judge": ""
     }
     try:
-        
-        #urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-        #response = requests.get(base_url, params=params, verify=False)  # Отключаем проверку SSL
-        #response.raise_for_status()
-        #return response.text
         query_string = urlencode(params)
         request_url = f"{base_url}?{query_string}"
         return request_url
     except requests.exceptions.RequestException as e:
         print(f"Ошибка запроса данных в СУДЫ ОБЩЕЙ ЮРИСДИКЦИИ по ФИО: {e}", flush=True)
         return None
-# https://sudact.ru/regular/doc/
-# ?regular-txt=%D0%98%D0%B2%D0%B0%D0%BD%D0%BE%D0%B2%20%D0%9C.%D0%90.&
-# regular-case_doc=&
-# regular-lawchunkinfo=&
-# regular-date_from=&
-# regular-date_to=&
-# regular-workflow_stage=&
-# regular-area=&&
-# regular-court=&
-# regular-judge=#searchResult
-# https://sudact.ru/magistrate/doc/
-# ?magistrate-txt=%D0%98%D0%B2%D0%B0%D0%BD%D0%BE%D0%B2%20%D0%9C.%D0%90.&
-# magistrate-case_doc=&
-# magistrate-lawchunkinfo=&
-# magistrate-date_from=&
-# magistrate-date_to=&
-# magistrate-area=&&
-# magistrate-court=&
-# magistrate-judge=#searchResult
-
-def sudact_magistrate(request):
+def sudact_magistrate(request, page=1):
     base_url = "https://sudact.ru/magistrate/doc/"
     params = {
-        "page": 1,
+        "page": page,
         "magistrate-txt": request,
         "magistrate-case_doc": "",
         "magistrate-lawchunkinfo": "",
@@ -161,7 +126,6 @@ def sudact_magistrate(request):
         "magistrate-area": "",
         "magistrate-court": "",
         "magistrate-judge": ""
-
     }
     try:
         query_string = urlencode(params)
@@ -179,7 +143,7 @@ def send_big_message(bot, chat_id, message, max_length=4096):
     for i in range(0, len(message), max_length):
         part = message[i:i + max_length]
         bot.send_message(chat_id=chat_id, text=part)
-
+        
 #Основное меню
 @bot.message_handler(content_types=["text"])
 def next_message(message):
@@ -222,12 +186,20 @@ def next_message(message):
             bot.send_message(chat_id, f"Получены данные по ИНН {inn_id}:\n{inn_request}", reply_markup=keyboard_subcategory)
             
     elif message.text.startswith("ФИЗ:"):
-        keyboard_subcategory = types.InlineKeyboardMarkup(row_width=1)
-        button_back = types.InlineKeyboardButton('Назад', callback_data='key0')
-        keyboard_subcategory.add(button_back)
-
+        # keyboard_subcategory = types.InlineKeyboardMarkup(row_width=1)
+        # button_back = types.InlineKeyboardButton('Назад', callback_data='key0')
+        # #пагинация в результатах описка
+        # button_next = types.InlineKeyboardButton('>', callback_data='key1')
+        # button_previous = types.InlineKeyboardButton('<', callback_data='key2')
+        # keyboard_subcategory.add(button_back, button_next, button_previous)
+        keyboard_subcategory = None  # По умолчанию пустая клавиатура
+        page = 1  # Значение по умолчанию
         try:
-            full_name = message.text.split(":")[1].strip()
+            parts = message.text.split(',')
+            if len(parts) > 1 and '=' in parts[1]:
+                page = int(parts[1].split('=')[1])
+            print(f"{now} получена страница для запроса: {page}", flush=True)
+            full_name = parts[0].split(":")[1].strip()
             name_parts = full_name.split()
             fiz_surname = name_parts[0]
             if len(name_parts) > 1:
@@ -238,14 +210,30 @@ def next_message(message):
             request_fiz = f"{fiz_surname}+{fiz_name}"
             now = datetime.datetime.now()
             print(f"{now} получено имя для запроса: {request_fiz}", flush=True)
+            
+            keyboard_subcategory = types.InlineKeyboardMarkup(row_width=1)
+            button_back = types.InlineKeyboardButton('Назад', callback_data='key0')
+            keyboard_subcategory.add(button_back)
+            #пагинация в результатах описка
+            if int(page) > 1:
+                button_previous = types.InlineKeyboardButton('<', callback_data=f'ФИЗ:{request_fiz}, page={max(page-1, 1)}')
+                print(f"{now} нажата кнопка > перехода на страницу: {page} для {request_fiz}", flush=True)
+                button_previous = types.InlineKeyboardButton('<', callback_data=f'ФИЗ:{request_fiz}, page={max(page-1, 1)}')
+                print(f"{now} нажата кнопка < перехода на страницу: {page} для {request_fiz}", flush=True)
+                keyboard_subcategory.add(button_previous)
+            button_next = types.InlineKeyboardButton('>', callback_data=f'ФИЗ:{request_fiz}, page={page+1}')
+            keyboard_subcategory.add(button_next)
             #response = sudact(request_fiz)
             #СУДЫ ОБЩЕЙ ЮРИСДИКЦИИ
-            response_regular, regular_total = parse_sudact(sudact(request_fiz))
+            #генерация странццы для парсинга в общих судах
+            response_regular, regular_total = parse_sudact(sudact(request_fiz, page))
             regular_results = prepare_message(response_regular)
             #print(sudact_result)
 
             #МИРОВЫЕ СУДЫ
-            response_magistrate, magistrate_total = parse_sudact(sudact_magistrate(request_fiz))
+            #генерация странццы для парсинга в мировых судах
+            response_magistrate, magistrate_total = parse_sudact(sudact_magistrate(request_fiz, page))
+
             magistrate_results = prepare_message(response_magistrate)
 
             bot.send_message(
@@ -307,6 +295,33 @@ def callback(call):
         keyboard_category.add(types.InlineKeyboardButton('Назад', callback_data='key0'),
                 )
         bot.edit_message_text(f'Получены данные по ИНН:{inn_id} \n{inn_request}', call.message.chat.id, call.message.message_id, reply_markup=keyboard_category)
+    elif call.data.startswith('ФИЗ:'):
+        try:
+            parts = call.data.split(',')
+            full_name = parts[0].split(':')[1].strip()
+            page = int(parts[1].split('=')[1]) if len(parts) > 1 and '=' in parts[1] else 1
+            # Здесь логика обработки смены страницы
+            response_regular, regular_total = parse_sudact(sudact(full_name, page))
+            regular_results = prepare_message(response_regular)
+            
+            keyboard_subcategory = types.InlineKeyboardMarkup(row_width=1)
+            button_back = types.InlineKeyboardButton('Назад', callback_data='key0')
+            if page > 1:
+                button_previous = types.InlineKeyboardButton('<', callback_data=f'ФИЗ:{full_name}, page={page-1}')
+                keyboard_subcategory.add(button_previous)
+            button_next = types.InlineKeyboardButton('>', callback_data=f'ФИЗ:{full_name}, page={page+1}')
+            keyboard_subcategory.add(button_next)
+            bot.edit_message_text(
+                f"По запросу {full_name} найдено {regular_total} документов в разделе \n"
+                f"Страница: {page}\n\n"
+                f"СУДЫ ОБЩЕЙ ЮРИСДИКЦИИ:\n\n {regular_results}", 
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                parse_mode="HTML",
+                reply_markup=keyboard_subcategory
+            )
+        except Exception as e:
+            print(f"call.data.startswith('ФИЗ:'): {e}")
 #запуск бота через supervisord
 def run_bot():
     now = datetime.datetime.now()
