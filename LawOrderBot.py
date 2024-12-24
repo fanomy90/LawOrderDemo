@@ -9,7 +9,8 @@ import datetime
 from urllib.parse import urlencode
 import time
 from requests.exceptions import RequestException
-
+import csv
+from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
 # Загрузка переменных окружения из файла .env
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
@@ -23,6 +24,36 @@ def COMPANYLOOKUP(input):
     response = requests.get(url)
     return response.text
 
+#загрузка списка городов из внешнего файла
+def load_area(file):
+    area = {}
+    with open(file, newline='', encoding='utf-8') as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            area[row['Area']] = {
+                'regular_area': row['Regular_Area'],
+                'magistrate_area': row['Magistrate_Area']
+            }
+    now = datetime.datetime.now()
+    print(f'{now} Загружен список городов: {area}', flush=True)
+    return area
+#формирование клавиатуры выбора города
+def area_keyboard(areas):
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+    for area, data in areas.items():
+        callback_data = f"area:{area},{data['regular_area']},{data['magistrate_area']}"
+        keyboard.add(InlineKeyboardButton(area, callback_data=callback_data))
+    keyboard.add(InlineKeyboardButton("Назад", callback_data="key0"))
+    return keyboard
+
+#очистка текста перед отправкой ботом
+def clean_text(text):
+    import html
+    import re
+    text = html.escape(text)  # Экранирует HTML-спецсимволы
+    text = re.sub(r'<[^>]+>', '', text)  # Удаляет HTML-теги
+    return text
+#парсинг страницы поиска результатов
 def parse_sudact(input):
     now = datetime.datetime.now()
     print(f"{now} начинаем парсить полученные данные из sudact.ru", flush=True)
@@ -61,11 +92,38 @@ def parse_sudact(input):
             print(f"{now} Найдено {len(posts_li)} элементов li в ul.results")
             results= []
             for post_li in posts_li:
+                # номер документа
+                numb = post_li.find("span", class_="numb")
+                number = numb.get_text(strip=True) if numb else ''
+                # number = post_li.find(class_="numb")
+                # заголовок и ссылка на документа
+                #краткое описание в документе
+                #post = post_li.get_text(strip=True)
+                #clean_post = clean_text(post)
+                # print(f"{now} Очищенный текст clean_post: {clean_post}")
+                # post = post_li.get_text(separator=' ', strip=True)
+                # post_parts = post.split('...')
+                # if len(post_parts) > 1:
+                #     # Извлекаем второй фрагмент после первого '...'
+                #     extracted_text = post_parts[1].strip()  # Удаляем лишние пробелы
+                #     clean_post = clean_text(extracted_text)
+                #     print("Извлеченный текст:", clean_post)
+                # else:
+                #     print("Не удалось найти текст после '...'")
                 link_tag = post_li.find("a")
                 if link_tag:
                     title = link_tag.get_text(strip=True)
                     url = "https://sudact.ru" + link_tag['href']
-                    results.append({'title': title, 'url': url})
+                    
+                    # results.append({'title': title, 'url': url})
+                    results.append({
+                        'number': number, 
+                        'title': title, 
+                        'url': url, 
+                        # 'clean_dispute': clean_dispute,
+                        # 'snippet': snippet,
+                        # 'clean_post': clean_post
+                        })
             #for result in results:
                 #print(f"Название: {result['title']}, Ссылка: {result['url']}")
             return results, total_results
@@ -80,17 +138,25 @@ def parse_sudact(input):
 def prepare_message(input):
     message = []
     for i in input:
+        number = i['number']
         title = i['title']
         url = i['url']
+        # clean_dispute = i['clean_dispute']
+        # snippet = i['snippet']
+        # clean_post = i['clean_post']
+        # clean_post = i['clean_post']
+        
         content = (
             #f"<b>{title}</b>\n"
-            f'<a href="{url}">{title}</a>\n\n'
+            # f'<a href="{url}">{title}</a>\n\n'
+            f'<a href="{url}">{number} {title}</a>\n\n'
+            # f'{clean_dispute} {snippet} {clean_post}\n\n'
         )
         message.append(content)
     # соединим все сообщения в одно с разделителями
     message_text = ''.join(message)
     return message_text
-#формирование ссылки для запроса данных
+#формирование ссылки для запроса данных в СУДЫ ОБЩЕЙ ЮРИСДИКЦИИ
 def sudact(request, page=1):
     base_url = "https://sudact.ru/regular/doc/"
     params = {
@@ -109,10 +175,15 @@ def sudact(request, page=1):
     try:
         query_string = urlencode(params)
         request_url = f"{base_url}?{query_string}"
+        now = datetime.datetime.now()
+        print(f"{now} Сформирована ссылка СУДЫ ОБЩЕЙ ЮРИСДИКЦИИ по ФИО: {request_url}", flush=True)
+
         return request_url
     except requests.exceptions.RequestException as e:
         print(f"Ошибка запроса данных в СУДЫ ОБЩЕЙ ЮРИСДИКЦИИ по ФИО: {e}", flush=True)
         return None
+        
+#формирование ссылки для запроса данных в МИРОВЫЕ СУДЫ
 def sudact_magistrate(request, page=1):
     base_url = "https://sudact.ru/magistrate/doc/"
     params = {
@@ -158,12 +229,14 @@ def next_message(message):
         #button2 = types.InlineKeyboardButton('Архив запросов по ИНН', callback_data='key2')
         button3 = types.InlineKeyboardButton('Найти информацию по имени', callback_data='key3')
         # keyboard_subcategory.add(button1, button2, button3)
-        keyboard_subcategory.add(button3)
+        button_regular = types.InlineKeyboardButton('Поиск в судах общей юрисдикции', callback_data='regular')
+        button_magistrate = types.InlineKeyboardButton('Поиск в мировых судах', callback_data='magistrate')
+
+        keyboard_subcategory.add(button3, button_regular, button_magistrate)
 
         bot.send_message(chat_id, 
                     text=f"Добро пожаловать, {username}!\nВыберите действие:",
                     reply_markup=keyboard_subcategory)
-
     # Новая проверка для сообщений, начинающихся с "ИНН:"
     elif message.text.startswith("ИНН:"):
         inn_id = message.text.split(":")[1].strip()  # Извлекаем ИНН после "ИНН:"
@@ -175,7 +248,7 @@ def next_message(message):
             bot.send_message(chat_id, f"Получены данные по ИНН {inn_id}:\n{inn_request}", reply_markup=keyboard_subcategory)
         else:
             bot.send_message(chat_id, "Пожалуйста, введите корректный 10- или 12-значный ИНН.", reply_markup=keyboard_subcategory)
-
+    # проверка для сообщений, начинающихся сразу с цифр без "ИНН:"
     elif message.text.isdigit() and len(message.text) in [10, 12]:
             inn_id = message.text
             inn_request = COMPANYLOOKUP(inn_id)
@@ -186,12 +259,6 @@ def next_message(message):
             bot.send_message(chat_id, f"Получены данные по ИНН {inn_id}:\n{inn_request}", reply_markup=keyboard_subcategory)
             
     elif message.text.startswith("ФИЗ:"):
-        # keyboard_subcategory = types.InlineKeyboardMarkup(row_width=1)
-        # button_back = types.InlineKeyboardButton('Назад', callback_data='key0')
-        # #пагинация в результатах описка
-        # button_next = types.InlineKeyboardButton('>', callback_data='key1')
-        # button_previous = types.InlineKeyboardButton('<', callback_data='key2')
-        # keyboard_subcategory.add(button_back, button_next, button_previous)
         keyboard_subcategory = None  # По умолчанию пустая клавиатура
         page = 1  # Значение по умолчанию
         try:
@@ -286,6 +353,21 @@ def callback(call):
         keyboard_category.add(types.InlineKeyboardButton('Назад', callback_data='key0'),
                 )
         bot.edit_message_text('Введите имя для запроса в формате: ФИЗ:Иванов Иван Иванович', call.message.chat.id, call.message.message_id, reply_markup=keyboard_category)
+    #новый функционал
+    elif call.data == 'regular':
+        area_path = 'area.csv'
+        if not os.path.exists(area_path):
+            raise FileNotFoundError(f"Файд {file_path} не найден")
+        areas = load_area(area_path)
+        keyboard = area_keyboard(areas)
+        bot.send_message(call.message.chat.id, "Выберите город", reply_markup=keyboard)
+
+    elif call.data.startswith('area:'):
+        areas_data = call.data.split(':')[1]
+        city, regular_area, magistrate_area = areas_data.split(',')  # Разделяем по запятой
+        bot.send_message(call.message.chat.id, f"Выбран город {city} для regular запроса: {regular_area}")
+    
+    
     elif call.data.startswith('ИНН:'):
         inn_id = call.data.split(':')[1]
         now = datetime.datetime.now()
@@ -295,6 +377,7 @@ def callback(call):
         keyboard_category.add(types.InlineKeyboardButton('Назад', callback_data='key0'),
                 )
         bot.edit_message_text(f'Получены данные по ИНН:{inn_id} \n{inn_request}', call.message.chat.id, call.message.message_id, reply_markup=keyboard_category)
+    #основной маршрут обработки и вывода результатов поизка документов по физлицу
     elif call.data.startswith('ФИЗ:'):
         try:
             parts = call.data.split(',')

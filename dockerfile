@@ -19,6 +19,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 #COPY . .
 COPY .env .env
 COPY LawOrderBot.py LawOrderBot.py
+COPY area.csv area.csv
 RUN chmod +x LawOrderBot.py
 # Команда для запуска скрипта
 #CMD ["python", "LawOrderBot.py"]
