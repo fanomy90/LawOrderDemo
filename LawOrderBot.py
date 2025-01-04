@@ -257,12 +257,13 @@ def next_message(message):
             button_back = types.InlineKeyboardButton('Назад', callback_data='key0')
             keyboard_subcategory.add(button_back)
             bot.send_message(chat_id, f"Получены данные по ИНН {inn_id}:\n{inn_request}", reply_markup=keyboard_subcategory)
-            
+    
+    #измененная обработка ввода ФИЗ с выбором раздела сайта sudact
     elif message.text.startswith("ФИЗ:"):
-        keyboard_subcategory = None  # По умолчанию пустая клавиатура
-        page = 1  # Значение по умолчанию
+        keyboard_subcategory = None
+        page = 1
+        parts = message.text.split(',')
         try:
-            parts = message.text.split(',')
             if len(parts) > 1 and '=' in parts[1]:
                 page = int(parts[1].split('=')[1])
             print(f"{now} получена страница для запроса: {page}", flush=True)
@@ -279,54 +280,97 @@ def next_message(message):
             print(f"{now} получено имя для запроса: {request_fiz}", flush=True)
             
             keyboard_subcategory = types.InlineKeyboardMarkup(row_width=1)
+            button_regular = types.InlineKeyboardButton(
+                'Поиск в судах общей юрисдикции', 
+                callback_data=f'ФИЗ:{request_fiz},page=1,sudact:regular'
+                )
+            button_magistrate = types.InlineKeyboardButton(
+                'Поиск в мировых судах', 
+                callback_data=f'ФИЗ:{request_fiz},page=1,sudact:magistrate')
             button_back = types.InlineKeyboardButton('Назад', callback_data='key0')
-            keyboard_subcategory.add(button_back)
-            #пагинация в результатах описка
-            if int(page) > 1:
-                button_previous = types.InlineKeyboardButton('<', callback_data=f'ФИЗ:{request_fiz}, page={max(page-1, 1)}')
-                print(f"{now} нажата кнопка > перехода на страницу: {page} для {request_fiz}", flush=True)
-                button_previous = types.InlineKeyboardButton('<', callback_data=f'ФИЗ:{request_fiz}, page={max(page-1, 1)}')
-                print(f"{now} нажата кнопка < перехода на страницу: {page} для {request_fiz}", flush=True)
-                keyboard_subcategory.add(button_previous)
-            button_next = types.InlineKeyboardButton('>', callback_data=f'ФИЗ:{request_fiz}, page={page+1}')
-            keyboard_subcategory.add(button_next)
-            #response = sudact(request_fiz)
-            #СУДЫ ОБЩЕЙ ЮРИСДИКЦИИ
-            #генерация странццы для парсинга в общих судах
-            response_regular, regular_total = parse_sudact(sudact(request_fiz, page))
-            regular_results = prepare_message(response_regular)
-            #print(sudact_result)
-
-            #МИРОВЫЕ СУДЫ
-            #генерация странццы для парсинга в мировых судах
-            response_magistrate, magistrate_total = parse_sudact(sudact_magistrate(request_fiz, page))
-
-            magistrate_results = prepare_message(response_magistrate)
+            keyboard_subcategory.add(button_regular, button_magistrate, button_back)
 
             bot.send_message(
                 chat_id, 
-                f"По запросу {request_fiz} найдено {regular_total} документов в разделе \n"
-                # f"{regular_total}\n\n" 
-                f"СУДЫ ОБЩЕЙ ЮРИСДИКЦИИ:\n\n {regular_results}", 
-                parse_mode="HTML", 
-                reply_markup=keyboard_subcategory
-            )
-            #bot.send_message(chat_id, message_regular, parse_mode="HTML")
-            time.sleep(2)
-            #отправка результатов по мировым судам
-            #bot.send_message(chat_id, f"По запросу {request_fiz} найдены документы \n\n МИРОВЫЕ СУДЫ:\n\n {response_magistrate}", reply_markup=keyboard_subcategory)
-            bot.send_message(
-                chat_id, 
-                f"По запросу {request_fiz} найдено {magistrate_total} документов в разделе \n"
-                # f"{magistrate_total}\n\n" 
-                f"МИРОВЫЕ СУДЫ:\n\n {magistrate_results}", 
+                f"По запросу ФИЗ: {request_fiz} выберите раздел для поиска \n",
                 parse_mode="HTML", 
                 reply_markup=keyboard_subcategory
             )
         except Exception as e:
             now = datetime.datetime.now()
-            print(f"{now} Ошибка при обработке ФИЗ: {e}", flush=True)
-            bot.send_message(chat_id, "Произошла ошибка при обработке запроса. Проверьте формат данных.", reply_markup=keyboard_subcategory)
+            print(f"{now} Ошибка: {e}", flush=True)
+            bot.send_message(chat_id, "Произошла ошибка. Проверьте формат запроса.")
+
+
+    # elif message.text.startswith("ФИЗ:"):
+    #     keyboard_subcategory = None  # По умолчанию пустая клавиатура
+    #     page = 1  # Значение по умолчанию
+    #     try:
+    #         parts = message.text.split(',')
+    #         if len(parts) > 1 and '=' in parts[1]:
+    #             page = int(parts[1].split('=')[1])
+    #         print(f"{now} получена страница для запроса: {page}", flush=True)
+    #         full_name = parts[0].split(":")[1].strip()
+    #         name_parts = full_name.split()
+    #         fiz_surname = name_parts[0]
+    #         if len(name_parts) > 1:
+    #             initials = f"{name_parts[1][0]}.{name_parts[2][0]}." if len(name_parts) > 2 else f"{name_parts[1][0]}."
+    #             fiz_name = initials
+    #         else:
+    #             fiz_name = ""
+    #         request_fiz = f"{fiz_surname}+{fiz_name}"
+    #         now = datetime.datetime.now()
+    #         print(f"{now} получено имя для запроса: {request_fiz}", flush=True)
+            
+    #         keyboard_subcategory = types.InlineKeyboardMarkup(row_width=1)
+    #         button_back = types.InlineKeyboardButton('Назад', callback_data='key0')
+    #         keyboard_subcategory.add(button_back)
+    #         #пагинация в результатах описка
+    #         if int(page) > 1:
+    #             button_previous = types.InlineKeyboardButton('<', callback_data=f'ФИЗ:{request_fiz}, page={max(page-1, 1)}')
+    #             print(f"{now} нажата кнопка > перехода на страницу: {page} для {request_fiz}", flush=True)
+    #             button_previous = types.InlineKeyboardButton('<', callback_data=f'ФИЗ:{request_fiz}, page={max(page-1, 1)}')
+    #             print(f"{now} нажата кнопка < перехода на страницу: {page} для {request_fiz}", flush=True)
+    #             keyboard_subcategory.add(button_previous)
+    #         button_next = types.InlineKeyboardButton('>', callback_data=f'ФИЗ:{request_fiz}, page={page+1}')
+    #         keyboard_subcategory.add(button_next)
+    #         #response = sudact(request_fiz)
+    #         #СУДЫ ОБЩЕЙ ЮРИСДИКЦИИ
+    #         #генерация странццы для парсинга в общих судах
+    #         response_regular, regular_total = parse_sudact(sudact(request_fiz, page))
+    #         regular_results = prepare_message(response_regular)
+    #         #print(sudact_result)
+
+    #         #МИРОВЫЕ СУДЫ
+    #         #генерация странццы для парсинга в мировых судах
+    #         response_magistrate, magistrate_total = parse_sudact(sudact_magistrate(request_fiz, page))
+
+    #         magistrate_results = prepare_message(response_magistrate)
+
+    #         bot.send_message(
+    #             chat_id, 
+    #             f"По запросу {request_fiz} найдено {regular_total} документов в разделе \n"
+    #             # f"{regular_total}\n\n" 
+    #             f"СУДЫ ОБЩЕЙ ЮРИСДИКЦИИ:\n\n {regular_results}", 
+    #             parse_mode="HTML", 
+    #             reply_markup=keyboard_subcategory
+    #         )
+    #         #bot.send_message(chat_id, message_regular, parse_mode="HTML")
+    #         time.sleep(2)
+    #         #отправка результатов по мировым судам
+    #         #bot.send_message(chat_id, f"По запросу {request_fiz} найдены документы \n\n МИРОВЫЕ СУДЫ:\n\n {response_magistrate}", reply_markup=keyboard_subcategory)
+    #         bot.send_message(
+    #             chat_id, 
+    #             f"По запросу {request_fiz} найдено {magistrate_total} документов в разделе \n"
+    #             # f"{magistrate_total}\n\n" 
+    #             f"МИРОВЫЕ СУДЫ:\n\n {magistrate_results}", 
+    #             parse_mode="HTML", 
+    #             reply_markup=keyboard_subcategory
+    #         )
+    #     except Exception as e:
+    #         now = datetime.datetime.now()
+    #         print(f"{now} Ошибка при обработке ФИЗ: {e}", flush=True)
+    #         bot.send_message(chat_id, "Произошла ошибка при обработке запроса. Проверьте формат данных.", reply_markup=keyboard_subcategory)
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback(call):
