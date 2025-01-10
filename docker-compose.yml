@@ -1,0 +1,146 @@
+version: "3.9"
+# глобальные настройки окружения
+x-environment-defaults: &environment-defaults
+  DEBUG: "True"
+  DB_NAME: "law_order"
+  DB_USER: "laworder"
+  DB_PASSWORD: "laworder1234567890"
+  DB_HOST: "postgres"
+  DB_PORT: 5432
+  CELERY_BROKER_URL: "redis://redis:6379/0"
+  CELERY_RESULT_BACKEND: "redis://redis:6379/0"
+  SECRET_KEY: "secret"
+
+services:
+  redis:
+    image: redis
+    ports:
+      - "6379:6379"
+    restart: always
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+  postgres:
+    restart: always
+    image: postgres:latest
+    container_name: postgres
+    environment:
+      POSTGRES_USER: laworder
+      POSTGRES_PASSWORD: laworder1234567890
+      POSTGRES_DB: law_order
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+  laworder:
+    restart: always
+    build:
+      context: ./
+      dockerfile: ./Dockerfile
+    ports:
+      - "9000:9000"
+    depends_on:
+      - postgres
+    environment:
+      <<: *environment-defaults
+    volumes:
+    #  - /home/projects/SAVE:/yt/news/SAVE
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - static_volume:/yt/static
+    env_file:
+        - .env
+  # nginx:
+  #   restart: always
+  #   build:
+  #     dockerfile: ./Dockerfile
+  #     context: ./docker/nginx/
+  #   container_name: nginx
+  #   # image: nginx:latest
+  #   volumes:
+  #     - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf
+  #     - ./docker/nginx/certificates:/etc/letsencrypt
+  #     - ./docker/nginx/challenges:/var/www/html
+  #     - static_volume:/yt/static
+  #     # - nginx_volume:/etc/nginx/conf.d
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   depends_on:
+  #     - laworder
+  # certbot:
+  #   restart: always
+  #   build:
+  #     dockerfile: ./Dockerfile
+  #     context: ./docker/certbot/
+  #   # image: certbot/certbot
+  #   volumes:
+  #     - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf
+  #     - ./docker/nginx/certificates:/etc/letsencrypt
+  #     - ./docker/nginx/challenges:/var/www/html
+  #     - static_volume:/yt/static
+  #     - /var/run/docker.sock:/var/run/docker.sock # для перезапуска nginx после обновления сертификатов
+  #   entrypoint: ["/usr/local/bin/cert_init.sh"]
+  #   # entrypoint: ["/bin/sh"]
+  #   depends_on:
+  #     # - nginx
+  #     - laworder
+  #     - celery
+  #   environment:
+  #     - DOCKER_HOST=unix:///var/run/docker.sock
+
+  celery:
+    restart: always
+    build:
+      context: ./
+    volumes:
+    #  - /home/projects/SAVE:/yt/puppeteer/SAVE
+      # - /home/projects/Slow_news/puppeteer/db.sqlite3:/yt/puppeteer/db.sqlite3  # Монтируем SQLite файл
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    # command: ['celery', '--workdir=./puppeteer', '-A', 'puppeteer', 'worker']
+    # command: ['celery', './yt/puppeteer/puppeteer', '-A', 'puppeteer', 'worker']
+    # command: ['celery', '--workdir=/yt/puppeteer', '-A', 'puppeteer', 'worker']
+    command: ['celery', '--workdir=.', '-A', 'LawOrder', 'worker']
+    depends_on:
+      - redis
+      - laworder
+      - postgres
+    environment:
+      #<<: *environment-defaults
+      DB_NAME: "law_order"
+      DB_USER: "laworder"
+      DB_PASSWORD: "laworder1234567890"
+      DB_HOST: "postgres"
+      DB_PORT: 5432  # Убедитесь, что это правильно настроено
+  # периодические фоновые задачи
+  celery-beat:
+    restart: always
+    build:
+      context: ./
+    volumes:
+      #- /home/projects/SAVE:/yt/LawOrder/SAVE
+      # - /home/projects/Slow_news/puppeteer/db.sqlite3:/yt/puppeteer/db.sqlite3  # Монтируем SQLite файл
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    # command: ['celery', '--workdir=./puppeteer', '-A', 'puppeteer', 'worker']
+    # command: ['celery', './yt/puppeteer/puppeteer', '-A', 'puppeteer', 'worker']
+    # command: ['celery', '--workdir=/yt/puppeteer', '-A', 'puppeteer', 'worker']
+    command: ['celery', '--workdir=.', '-A', 'LawOrder', 'beat']
+    depends_on:
+      - redis
+      - laworder
+      - postgres
+    environment:
+      # <<: *environment-defaults
+      DB_NAME: "law_order"
+      DB_USER: "laworder"
+      DB_PASSWORD: "laworder1234567890"
+      DB_HOST: "postgres"
+      DB_PORT: 5432  # Убедитесь, что это правильно настроено
+
+volumes:
+    postgres_data:
+    static_volume:
+    # media_volume:
+    nginx_volume:
