@@ -11,11 +11,12 @@ class Documents(models.Model):
     document_tribunal = models.CharField(max_length=155, verbose_name='Суд')
     document_judge = models.CharField(max_length=155, verbose_name='Судья')
     document_content = models.TextField(blank=True, verbose_name='Текст документа')
-    document_instance = models.CharField(default=None, max_length=100, verbose_name="Инстанция длкумента")
+    # document_instance = models.CharField(default=None, max_length=100, verbose_name="Инстанция длкумента")
     time_create = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
     time_update = models.DateTimeField(auto_now=True, verbose_name='Дата обновления')
     is_published = models.BooleanField(default=True, verbose_name='Публикация документа')
     cat = models.ForeignKey('Category', on_delete=models.PROTECT, verbose_name='Категория документа')
+    inst = models.ForeignKey('Instance', blank=True, null=True, on_delete=models.PROTECT, verbose_name='Инстанция документа')
 
     def __str__(self):
         return self.document_title
@@ -29,6 +30,7 @@ class Documents(models.Model):
 
 class Category(models.Model):
     name = models.CharField(max_length=100, db_index=True, verbose_name='Категория')
+    category_tag = models.CharField(default=None, max_length=100, db_index=True, verbose_name='Тег категории')
     slug = models.SlugField(max_length=255, unique=True, db_index=True, verbose_name="URL")
     def __str__(self):
         return self.name
@@ -37,6 +39,19 @@ class Category(models.Model):
     class Meta:
         verbose_name = 'Категория'
         verbose_name_plural = 'Категория'
+        ordering = ['id']
+
+class Instance(models.Model):
+    name = models.CharField(max_length=100, db_index=True, verbose_name='Инстанция')
+    instance_tag = models.CharField(default=None, max_length=100, db_index=True, verbose_name='Тег инстанции')
+    slug = models.SlugField(max_length=255, unique=True, db_index=True, verbose_name="URL")
+    def __str__(self):
+        return self.name
+    def get_absolute_url(self):
+        return reverse('instance', kwargs={'inst_slug': self.slug})
+    class Meta:
+        verbose_name = 'Инстанция'
+        verbose_name_plural = 'Инстанции'
         ordering = ['id']
 
 class Region(models.Model):

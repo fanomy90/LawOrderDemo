@@ -44,7 +44,7 @@ services:
     environment:
       <<: *environment-defaults
     volumes:
-    #  - /home/projects/SAVE:/yt/news/SAVE
+      - /home/skiner/projects/LawOrderDemo/LawOrder/db.sqlite3:/yt/db.sqlite3
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
       - static_volume:/yt/static

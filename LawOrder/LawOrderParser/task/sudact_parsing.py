@@ -9,6 +9,50 @@ from urllib.parse import urlencode
 import time
 from requests.exceptions import RequestException
 
+#нормализация полей для формирования поиска на сайте
+def find_normalize(category, date_from, date_to, instance, page):
+    
+    if category == "Суды общей юрисдикции"
+        base_url = "https://sudact.ru/regular/doc/"
+        params = {
+            "page": page,
+            # "regular-txt": request,
+            "regular-txt": "",
+            "regular-case_doc": "",
+            "regular-lawchunkinfo": "",
+            "regular-date_from": date_from,
+            "regular-date_to": date_to,
+
+            "regular-workflow_stage": instance,
+
+            # "regular-area": "1013",
+
+            "regular-area": "",
+
+            "regular-court": "",
+            "regular-judge": ""
+        }
+
+    if category == "Мировые суды"
+        base_url = "https://sudact.ru/magistrate/doc/"
+        params = {
+            "page": page,
+            # "magistrate-txt": request,
+            "magistrate-txt": "",
+            "magistrate-case_doc": "",
+            "magistrate-lawchunkinfo": "",
+            "magistrate-date_from": "",
+            "magistrate-date_to": "",
+            #"magistrate-workflow_stage": "",
+
+            "magistrate-area": "",
+
+            "magistrate-court": "",
+            "magistrate-judge": ""
+        }
+
+
+
 def parse_sudact(input):
     now = datetime.datetime.now()
     print(f"{now} начинаем парсить полученные данные из sudact.ru", flush=True)
@@ -37,8 +81,9 @@ def parse_sudact(input):
                 total_text = search_result.get_text(strip=True)
                 print(f"{now} Текст из 'prompting': {total_text}")
                 total_results = int(''.join(filter(str.isdigit, total_text))) if any(char.isdigit() for char in total_text) else 0
+            #нужно использовать total_results для парсинга найденныз результатов и перехода к следующим параметрам поиска - использовать конструктор поиска
             print(total_results)
-            #ищем ссылки на решения судов
+            #ищем ссылки на решения судов - нужно парсить данные ссылки и записывать данные в БД
             posts_ul = soup.find("ul", class_='results')
             if not posts_ul:
                 print(f"{now} Теги ul с классом 'results' не найдены на странице")
@@ -50,37 +95,15 @@ def parse_sudact(input):
                 # номер документа
                 numb = post_li.find("span", class_="numb")
                 number = numb.get_text(strip=True) if numb else ''
-                # number = post_li.find(class_="numb")
-                # заголовок и ссылка на документа
-                #краткое описание в документе
-                #post = post_li.get_text(strip=True)
-                #clean_post = clean_text(post)
-                # print(f"{now} Очищенный текст clean_post: {clean_post}")
-                # post = post_li.get_text(separator=' ', strip=True)
-                # post_parts = post.split('...')
-                # if len(post_parts) > 1:
-                #     # Извлекаем второй фрагмент после первого '...'
-                #     extracted_text = post_parts[1].strip()  # Удаляем лишние пробелы
-                #     clean_post = clean_text(extracted_text)
-                #     print("Извлеченный текст:", clean_post)
-                # else:
-                #     print("Не удалось найти текст после '...'")
                 link_tag = post_li.find("a")
                 if link_tag:
                     title = link_tag.get_text(strip=True)
                     url = "https://sudact.ru" + link_tag['href']
-                    
-                    # results.append({'title': title, 'url': url})
                     results.append({
                         'number': number, 
                         'title': title, 
                         'url': url, 
-                        # 'clean_dispute': clean_dispute,
-                        # 'snippet': snippet,
-                        # 'clean_post': clean_post
                         })
-            #for result in results:
-                #print(f"Название: {result['title']}, Ссылка: {result['url']}")
             return results, total_results
         else:
             print(f"{now} Код ответа от сайта sudact: {response.status_code}")
@@ -88,3 +111,20 @@ def parse_sudact(input):
     except Exception as e:
         print(f"{now} Парсинг данных с сайта sudact.ru завершился с ошибкой: {e}")
         return None, 0
+
+# блок для формирования страницы поиска на сайте
+def sudact_find():
+    try:
+        # раздел
+        category = "Суды общей юрисдикции"
+        # параметры поиска: дата с по
+        date_from = "02.01.2024"
+        date_to = "02.01.2024"
+        # area
+        region = "Ленинградская область"
+        # инстанция
+        instance = "Первая инстанция"
+        # нормализация поисковыъ параметров для формирования запроса к сайту
+        find_normalize(category, date_from, date_to, instance)
+        # запуск парсера с выбранными парпаметрами 
+        parse_sudact() 

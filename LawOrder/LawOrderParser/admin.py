@@ -15,12 +15,13 @@ class DocumentsAdmin(admin.ModelAdmin):
         'document_title', 
         'document_date',
         'get_category_name', 
+        'get_instance_name', 
         'time_create', 
         'document_date',
         'document_city', 
         'document_tribunal',
         'document_judge',
-        'document_instance',
+        # 'document_instance',
         'is_published'
         )
     list_display_links = ('id', 'document_title')
@@ -32,7 +33,7 @@ class DocumentsAdmin(admin.ModelAdmin):
         'document_city', 
         'document_tribunal',
         'document_judge',
-        'document_instance'
+        # 'document_instance'
         )
     #Разрешение редактирования параметра публикации в админке
     list_editable = ('is_published', )
@@ -44,7 +45,7 @@ class DocumentsAdmin(admin.ModelAdmin):
         'document_city', 
         'document_tribunal',
         'document_judge',
-        'document_instance'
+        # 'document_instance'
         )
     #Автоматическое создание слага по введенному полю в админке
     prepopulated_fields = {"slug": ("document_title",)}
@@ -52,13 +53,26 @@ class DocumentsAdmin(admin.ModelAdmin):
     def get_category_name(self, obj):
         return obj.cat.name  # Возвращаем имя категории
     get_category_name.short_description = 'Категория'  # Задаем название столбца в админке
+    
+    def get_instance_name(self, obj):
+        return obj.inst.name  # Возвращаем имя категории
+    get_instance_name.short_description = 'Инстанция'  # Задаем название столбца в админке
 
 class CategoryAdmin(admin.ModelAdmin):
-    list_display = ('id', 'slug', 'name')
-    list_display_links = ('id', 'name')
+    list_display = ('id', 'slug', 'name', 'category_tag')
+    list_display_links = ('id', 'name', 'category_tag')
     #так как передаем кортеж то для одного элемента надо поставить запятую
-    search_fields = ('name',)
-    prepopulated_fields = {"slug": ("name",)}
+    search_fields = ('name', 'category_tag')
+    # prepopulated_fields = {"slug": ("name",)}
+    prepopulated_fields = {"slug": ("category_tag",)}
+
+class InstanceAdmin(admin.ModelAdmin):
+    list_display = ('id', 'slug', 'name', "instance_tag")
+    list_display_links = ('id', 'name', 'instance_tag')
+    #так как передаем кортеж то для одного элемента надо поставить запятую
+    search_fields = ('name', "instance_tag")
+    # prepopulated_fields = {"slug": ("name",)}
+    prepopulated_fields = {"slug": ("instance_tag",)}
 
 class RegionAdmin(admin.ModelAdmin):
     list_display = (
@@ -91,6 +105,7 @@ class TelegramSubscriberAdmin(admin.ModelAdmin):
     
 admin.site.register(Documents, DocumentsAdmin)
 admin.site.register(Category, CategoryAdmin)
+admin.site.register(Instance, InstanceAdmin)
 admin.site.register(TelegramSubscriber, TelegramSubscriberAdmin)
 admin.site.register(Region, RegionAdmin)
 
