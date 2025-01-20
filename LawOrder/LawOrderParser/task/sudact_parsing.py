@@ -10,9 +10,9 @@ import time
 from requests.exceptions import RequestException
 
 #нормализация полей для формирования поиска на сайте
-def find_normalize(category, date_from, date_to, instance, page):
+def finds_url(category, date_from, date_to, instance, region, page=1):
     
-    if category == "Суды общей юрисдикции"
+    if category == "Суды общей юрисдикции":
         base_url = "https://sudact.ru/regular/doc/"
         params = {
             "page": page,
@@ -27,13 +27,14 @@ def find_normalize(category, date_from, date_to, instance, page):
 
             # "regular-area": "1013",
 
-            "regular-area": "",
+            "regular-area": region,
 
             "regular-court": "",
             "regular-judge": ""
         }
 
-    if category == "Мировые суды"
+
+    elif  category == "Мировые суды":
         base_url = "https://sudact.ru/magistrate/doc/"
         params = {
             "page": page,
@@ -41,15 +42,26 @@ def find_normalize(category, date_from, date_to, instance, page):
             "magistrate-txt": "",
             "magistrate-case_doc": "",
             "magistrate-lawchunkinfo": "",
-            "magistrate-date_from": "",
-            "magistrate-date_to": "",
+            "magistrate-date_from": date_from,
+            "magistrate-date_to": date_to,
             #"magistrate-workflow_stage": "",
 
-            "magistrate-area": "",
+            "magistrate-area": region,
 
             "magistrate-court": "",
             "magistrate-judge": ""
         }
+    else:
+        raise ValueError(f"Неизвестная категория: {category}")
+    try:
+        query_string = urlencode(params)
+        request_url = f"{base_url}?{query_string}"
+        now = datetime.datetime.now()
+        print(f"{now} Сформирована ссылка для поиска: {request_url}", flush=True)
+        return request_url
+    except requests.exceptions.RequestException as e:
+        print(f"Ошибка формирование ссылки для поиска: {e}", flush=True)
+        return None
 
 
 
@@ -68,8 +80,14 @@ def parse_sudact(input):
             except RequestException as e:
                 print(f"{now} Ошибка при обращении к сайту sudact: {e}", flush=True)
                 time.sleep(5)
+        if not response:
+            print(f"{now} Запрос данных с сайта sudact не удался после 3 попыток")
+            return None, 0
         else:
             print(f"{now} Запрос данных с сайта sudact не удался после 3 попыток, проверьте доступность сайта")
+        if response.status_code != 200:
+            print(f"{now} Код ответа от сайта sudact: {response.status_code}")
+            return None, 0
         if response.status_code == 200:
             print(f"{now} Сайт sudact доступен, начинаем парсить теги")
             src = response.text
@@ -81,6 +99,8 @@ def parse_sudact(input):
                 total_text = search_result.get_text(strip=True)
                 print(f"{now} Текст из 'prompting': {total_text}")
                 total_results = int(''.join(filter(str.isdigit, total_text))) if any(char.isdigit() for char in total_text) else 0
+            if not search_result:
+                print(f"{now} Тег div.prompting не найден, предполагаем, что total_results = 0")
             #нужно использовать total_results для парсинга найденныз результатов и перехода к следующим параметрам поиска - использовать конструктор поиска
             print(total_results)
             #ищем ссылки на решения судов - нужно парсить данные ссылки и записывать данные в БД
@@ -89,11 +109,16 @@ def parse_sudact(input):
                 print(f"{now} Теги ul с классом 'results' не найдены на странице")
                 return
             posts_li = posts_ul.find_all("li")
+            if not posts_li:
+                print(f"{now} Данные для парсинга не найдены.")
+                return [], total_results
             print(f"{now} Найдено {len(posts_li)} элементов li в ul.results")
             results= []
             for post_li in posts_li:
                 # номер документа
                 numb = post_li.find("span", class_="numb")
+                # if not numb:
+                #     print(f"{now} Элемент span.numb не найден в li")
                 number = numb.get_text(strip=True) if numb else ''
                 link_tag = post_li.find("a")
                 if link_tag:
@@ -121,10 +146,25 @@ def sudact_find():
         date_from = "02.01.2024"
         date_to = "02.01.2024"
         # area
-        region = "Ленинградская область"
+        # region = "Ленинградская область"
+        region = "1014"
         # инстанция
-        instance = "Первая инстанция"
+        # instance = "Первая инстанция"
+        instance = "10"
+
         # нормализация поисковыъ параметров для формирования запроса к сайту
-        find_normalize(category, date_from, date_to, instance)
+        request_url = finds_url(category, date_from, date_to, instance, region)
+        if not request_url:
+            print(f"{now} Ошибка формирования URL для поиска")
+            return
         # запуск парсера с выбранными парпаметрами 
-        parse_sudact() 
+        
+        response_regular, regular_total = parse_sudact(request_url)
+
+        if response_regular is not None:
+            print(f"{now} Успешно обработано: {len(response_regular)} результатов, всего найдено: {regular_total}")
+        else:
+            print(f"{now} Парсинг завершился неудачно")
+    except Exception as e:
+        now = datetime.datetime.now()
+        print (f"{now} найдено {regular_total} результатов")
