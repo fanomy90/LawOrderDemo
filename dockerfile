@@ -4,6 +4,9 @@ SHELL ["/bin/bash", "-c"]
 # Настройки виртуального окружения: запрет создания кэш файлов и запрет буферизации сообщений с логами 
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
+
+# ENV PYTHONPATH="/yt:${PYTHONPATH}"
+
 # Обновим pip
 # RUN pip install --upgrade pip
 RUN apt-get update && apt-get install -y curl && apt-get clean

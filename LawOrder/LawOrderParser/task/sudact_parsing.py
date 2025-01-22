@@ -1,4 +1,5 @@
 import os
+import sys
 from dotenv import load_dotenv
 from pathlib import Path
 import requests
@@ -8,7 +9,17 @@ import datetime
 from urllib.parse import urlencode
 import time
 from requests.exceptions import RequestException
+from celery import shared_task
+from django.conf import settings
 
+# Получаем путь к корневой директории проекта
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Добавляем корневую директорию в PYTHONPATH
+sys.path.append(project_root)
+# Укажите переменную окружения для настроек Django
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'LawOrder.settings')
+import django
+django.setup()
 #нормализация полей для формирования поиска на сайте
 def finds_url(category, date_from, date_to, instance, region, page=1):
     
@@ -138,7 +149,9 @@ def parse_sudact(input):
         return None, 0
 
 # блок для формирования страницы поиска на сайте
-def sudact_find():
+@shared_task(bind=True, time_limit=60, soft_time_limit=30)
+# def sudact_find():
+def sudact_find(self, mode=None):
     try:
         # раздел
         category = "Суды общей юрисдикции"

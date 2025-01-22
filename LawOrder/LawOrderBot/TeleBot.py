@@ -1,3 +1,5 @@
+import sys
+sys.path.append('/yt')
 from telebot import types, TeleBot
 import os
 from dotenv import load_dotenv
@@ -11,6 +13,9 @@ import time
 from requests.exceptions import RequestException
 import csv
 from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+from LawOrderParser.tasks import parsing
+
 # Загрузка переменных окружения из файла .env
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
@@ -230,9 +235,12 @@ def next_message(message):
         button3 = types.InlineKeyboardButton('Найти информацию по имени', callback_data='key3')
         # keyboard_subcategory.add(button1, button2, button3)
         button_regular = types.InlineKeyboardButton('Поиск в судах общей юрисдикции', callback_data='regular')
-        button_magistrate = types.InlineKeyboardButton('Поиск в мировых судах', callback_data='magistrate')
 
-        keyboard_subcategory.add(button3, button_regular, button_magistrate)
+        button_magistrate = types.InlineKeyboardButton('Поиск в мировых судах', callback_data='magistrate')
+        
+        button_parse = types.InlineKeyboardButton('Запуск парсера', callback_data='parse')
+        
+        keyboard_subcategory.add(button3, button_regular, button_magistrate, button_parse)
 
         bot.send_message(chat_id, 
                     text=f"Добро пожаловать, {username}!\nВыберите действие:",
@@ -405,6 +413,15 @@ def callback(call):
         areas = load_area(area_path)
         keyboard = area_keyboard(areas)
         bot.send_message(call.message.chat.id, "Выберите город", reply_markup=keyboard)
+
+    elif call.data == 'parse':
+        keyboard = area_keyboard(areas)
+        bot.send_message(call.message.chat.id, "Запущен парсер смотри лог выполнения", reply_markup=keyboard)
+        # Запуск Celery задачи
+        result = parsing.delay()
+
+        # Выводим ID задачи для отладки (по желанию)
+        bot.send_message(call.message.chat.id, f"ID запущенной задачи: {result.id}")
 
     elif call.data.startswith('area:'):
         areas_data = call.data.split(':')[1]
