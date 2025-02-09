@@ -1,5 +1,6 @@
 import sys
 sys.path.append('/yt')
+import telebot
 from telebot import types, TeleBot
 import os
 from dotenv import load_dotenv
@@ -16,12 +17,34 @@ from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from LawOrderParser.tasks import parsing
 
+# from LawOrderParser.models import *
+from LawOrderParser import models
+
 # Загрузка переменных окружения из файла .env
-load_dotenv()
-TOKEN = os.getenv("TOKEN")
+# load_dotenv()
+# TOKEN = os.getenv("TOKEN")
+# if not TOKEN or ":" not in TOKEN:
+#     raise ValueError(f"Ошибка: Загруженный токен `{TOKEN}` невалиден")
+# now = datetime.datetime.now()
+# print(f'{now} Загружен токен бота {TOKEN}', flush=True)
+# # bot = TeleBot(TOKEN)
+# # bot = TeleBot(str(TOKEN).strip())
+# bot = telebot.TeleBot("7300227909:AAG-e8fsDro4SXWueGXN-CV6KGuShcorchU")
+
 now = datetime.datetime.now()
-print(f'{now} Загружен токен бота {TOKEN}', flush=True)
-bot = TeleBot(TOKEN)
+TOKEN = "7300227909:AAG-e8fsDro4SXWueGXN-CV6KGuShcorchU"
+
+print(f"{now} Загружен токен бота: `{TOKEN}` (длина: {len(TOKEN)})", flush=True)
+
+# Дополнительные проверки
+if not isinstance(TOKEN, str):
+    raise TypeError(f"ОШИБКА: Токен должен быть строкой, но сейчас это {type(TOKEN)}")
+
+if ":" not in TOKEN:
+    raise ValueError(f"ОШИБКА: Токен `{TOKEN}` не содержит двоеточие!")
+
+bot = telebot.TeleBot(TOKEN)
+print("✅ Бот успешно создан!")
 
 #Вспомогательные функции
 def COMPANYLOOKUP(input):
@@ -29,21 +52,45 @@ def COMPANYLOOKUP(input):
     response = requests.get(url)
     return response.text
 
+# Преобразует DecimalField в строку без .0
+def safe_decimal(value):
+    if value is None:
+        return ""
+    if isinstance(value, Decimal):
+        return str(int(value))
+    return str(value)
+
 #загрузка списка городов из внешнего файла
-def load_area(file):
+# def load_area(file):
+def load_area():
     area = {}
-    with open(file, newline='', encoding='utf-8') as csvfile:
-        reader = csv.DictReader(csvfile)
-        for row in reader:
-            area[row['Area']] = {
-                'regular_area': row['Regular_Area'],
-                'magistrate_area': row['Magistrate_Area']
+    try:
+        #чтение регионов из файла
+        # with open(file, newline='', encoding='utf-8') as csvfile:
+        #     reader = csv.DictReader(csvfile)
+        #     for row in reader:
+        #         area[row['Area']] = {
+        #             'regular_area': row['Regular_Area'],
+        #             'magistrate_area': row['Magistrate_Area']
+        #         }
+
+        # чтение регионов из БД
+        for region in models.Region.objects.all():
+            area[region.region_name] = {
+                'arbitral_area': str(region.arbitral_region) if region.arbitral_region else "",
+                'regular_area': str(region.regular_region) if region.regular_region else "",
+                'magistrate_area': str(region.magistrate_region) if region.magistrate_region else "",
             }
-    now = datetime.datetime.now()
-    print(f'{now} Загружен список городов: {area}', flush=True)
+
+        now = datetime.datetime.now()
+        print(f'{now} Загружен список городов: {area}', flush=True)
+    except Exception as e:
+        print(f"Ошибка при загрузке регионов: {e}", flush=True)
     return area
 #формирование клавиатуры выбора города
+# def area_keyboard(areas):
 def area_keyboard(areas):
+    # areas = load_area()
     keyboard = types.InlineKeyboardMarkup(row_width=2)
     for area, data in areas.items():
         callback_data = f"area:{area},{data['regular_area']},{data['magistrate_area']}"
@@ -310,78 +357,11 @@ def next_message(message):
             bot.send_message(chat_id, "Произошла ошибка. Проверьте формат запроса.")
 
 
-    # elif message.text.startswith("ФИЗ:"):
-    #     keyboard_subcategory = None  # По умолчанию пустая клавиатура
-    #     page = 1  # Значение по умолчанию
-    #     try:
-    #         parts = message.text.split(',')
-    #         if len(parts) > 1 and '=' in parts[1]:
-    #             page = int(parts[1].split('=')[1])
-    #         print(f"{now} получена страница для запроса: {page}", flush=True)
-    #         full_name = parts[0].split(":")[1].strip()
-    #         name_parts = full_name.split()
-    #         fiz_surname = name_parts[0]
-    #         if len(name_parts) > 1:
-    #             initials = f"{name_parts[1][0]}.{name_parts[2][0]}." if len(name_parts) > 2 else f"{name_parts[1][0]}."
-    #             fiz_name = initials
-    #         else:
-    #             fiz_name = ""
-    #         request_fiz = f"{fiz_surname}+{fiz_name}"
-    #         now = datetime.datetime.now()
-    #         print(f"{now} получено имя для запроса: {request_fiz}", flush=True)
-            
-    #         keyboard_subcategory = types.InlineKeyboardMarkup(row_width=1)
-    #         button_back = types.InlineKeyboardButton('Назад', callback_data='key0')
-    #         keyboard_subcategory.add(button_back)
-    #         #пагинация в результатах описка
-    #         if int(page) > 1:
-    #             button_previous = types.InlineKeyboardButton('<', callback_data=f'ФИЗ:{request_fiz}, page={max(page-1, 1)}')
-    #             print(f"{now} нажата кнопка > перехода на страницу: {page} для {request_fiz}", flush=True)
-    #             button_previous = types.InlineKeyboardButton('<', callback_data=f'ФИЗ:{request_fiz}, page={max(page-1, 1)}')
-    #             print(f"{now} нажата кнопка < перехода на страницу: {page} для {request_fiz}", flush=True)
-    #             keyboard_subcategory.add(button_previous)
-    #         button_next = types.InlineKeyboardButton('>', callback_data=f'ФИЗ:{request_fiz}, page={page+1}')
-    #         keyboard_subcategory.add(button_next)
-    #         #response = sudact(request_fiz)
-    #         #СУДЫ ОБЩЕЙ ЮРИСДИКЦИИ
-    #         #генерация странццы для парсинга в общих судах
-    #         response_regular, regular_total = parse_sudact(sudact(request_fiz, page))
-    #         regular_results = prepare_message(response_regular)
-    #         #print(sudact_result)
-
-    #         #МИРОВЫЕ СУДЫ
-    #         #генерация странццы для парсинга в мировых судах
-    #         response_magistrate, magistrate_total = parse_sudact(sudact_magistrate(request_fiz, page))
-
-    #         magistrate_results = prepare_message(response_magistrate)
-
-    #         bot.send_message(
-    #             chat_id, 
-    #             f"По запросу {request_fiz} найдено {regular_total} документов в разделе \n"
-    #             # f"{regular_total}\n\n" 
-    #             f"СУДЫ ОБЩЕЙ ЮРИСДИКЦИИ:\n\n {regular_results}", 
-    #             parse_mode="HTML", 
-    #             reply_markup=keyboard_subcategory
-    #         )
-    #         #bot.send_message(chat_id, message_regular, parse_mode="HTML")
-    #         time.sleep(2)
-    #         #отправка результатов по мировым судам
-    #         #bot.send_message(chat_id, f"По запросу {request_fiz} найдены документы \n\n МИРОВЫЕ СУДЫ:\n\n {response_magistrate}", reply_markup=keyboard_subcategory)
-    #         bot.send_message(
-    #             chat_id, 
-    #             f"По запросу {request_fiz} найдено {magistrate_total} документов в разделе \n"
-    #             # f"{magistrate_total}\n\n" 
-    #             f"МИРОВЫЕ СУДЫ:\n\n {magistrate_results}", 
-    #             parse_mode="HTML", 
-    #             reply_markup=keyboard_subcategory
-    #         )
-    #     except Exception as e:
-    #         now = datetime.datetime.now()
-    #         print(f"{now} Ошибка при обработке ФИЗ: {e}", flush=True)
-    #         bot.send_message(chat_id, "Произошла ошибка при обработке запроса. Проверьте формат данных.", reply_markup=keyboard_subcategory)
+    # bot.send_message(chat_id, "Произошла ошибка при обработке запроса. Проверьте формат данных.", reply_markup=keyboard_subcategory)
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback(call):
+    areas = load_area()
     if call.data == 'key0':
         keyboard_category = types.InlineKeyboardMarkup(row_width=1)
         # keyboard_category.add(types.InlineKeyboardButton('Найти информацию по ИНН', callback_data='key1'),
@@ -410,7 +390,12 @@ def callback(call):
         area_path = 'area.csv'
         if not os.path.exists(area_path):
             raise FileNotFoundError(f"Файд {file_path} не найден")
-        areas = load_area(area_path)
+
+        # старый вариант подгрузки городов из файла
+        # areas = load_area(area_path)
+        # вариант подгрузки городов из БД
+        # areas = load_area()
+
         keyboard = area_keyboard(areas)
         bot.send_message(call.message.chat.id, "Выберите город", reply_markup=keyboard)
 
@@ -467,14 +452,36 @@ def callback(call):
         except Exception as e:
             print(f"call.data.startswith('ФИЗ:'): {e}")
 #запуск бота через supervisord
+# def run_bot():
+#     now = datetime.datetime.now()
+#     print(f"{now} Запуск Telegram-бота...", flush=True)
+#     try:
+#         # Запуск polling с настройкой тайм-аутов
+#         bot.polling(none_stop=True, timeout=60, long_polling_timeout=60)
+#     except Exception as e:
+#         now = datetime.datetime.now()
+#         print(f"{now} Ошибка: {e}", flush=True)
+#         time.sleep(10)  # Подождать перед попыткой перезапуска
+#         run_bot()  # Попробовать перезапустить бота через некоторое время
+# if __name__ == "__main__":
+#     run_bot()
+
 def run_bot():
     now = datetime.datetime.now()
     print(f"{now} Запуск Telegram-бота...", flush=True)
     try:
+        # Инициализация бота (например, токен)
+        bot = telebot.TeleBot('YOUR_BOT_TOKEN')
+        print(f"{now} Токен загружен", flush=True)
+        
         # Запуск polling с настройкой тайм-аутов
+        print("🚀 Попытка запуска бота...", flush=True)
         bot.polling(none_stop=True, timeout=60, long_polling_timeout=60)
     except Exception as e:
         now = datetime.datetime.now()
         print(f"{now} Ошибка: {e}", flush=True)
+        time.sleep(10)  # Подождать перед попыткой перезапуска
+        run_bot()  # Попробовать перезапустить бота через некоторое время
+
 if __name__ == "__main__":
     run_bot()
