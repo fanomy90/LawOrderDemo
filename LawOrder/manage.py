@@ -3,6 +3,12 @@
 import os
 import sys
 
+# Получаем путь к родительской директории
+sys.path.insert(0, "/yt")  # Добавляем корневую папку проекта
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Добавляем родительскую директорию в sys.path
+sys.path.append(BASE_DIR)
 
 def main():
     """Run administrative tasks."""

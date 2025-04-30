@@ -62,7 +62,6 @@ class Region(models.Model):
     city_created_at = models.DateTimeField(auto_now_add=True)
     city_updated_at = models.DateTimeField(auto_now=True)
 
-
 #пользователи телеграм
 class TelegramSubscriber(models.Model):
     #данные пользователя
