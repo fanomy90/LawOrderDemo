@@ -8,6 +8,9 @@ app.autodiscover_tasks()
 
 app.conf.broker_connection_retry_on_startup = True
 
+# <-- ВАЖНО: Автоматический autodiscover задач -->
+app.autodiscover_tasks(['LawOrderParser'])
+
 @app.task(bind=True, ignore_result=True)
 def debug_task(self):
     print('Request: {}'.format(self.request))

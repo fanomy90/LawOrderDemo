@@ -6,6 +6,15 @@ import requests
 import datetime
 import django
 
+from LawOrderParser.tasks import parsing
+from LawOrderParser.task.sudact_parsing import parse_document
+
+# для редиски
+import uuid
+import redis
+import time
+from LawOrderParser.utils.redis_client import redis_client
+
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "LawOrder.settings")
 
 
@@ -67,7 +76,8 @@ def callback(call):
     if call.data == 'key0':
         keyboard_category = types.InlineKeyboardMarkup(row_width=1)
         keyboard_category.add(types.InlineKeyboardButton('Подписаться на бота', callback_data='key1'),
-                        types.InlineKeyboardButton('Отписаться от бота', callback_data='key2'))
+                        types.InlineKeyboardButton('Отписаться от бота', callback_data='key2'),
+                        types.InlineKeyboardButton('Запустить парсер', callback_data='key3'))
         bot.edit_message_text('Выберите операцию', chat_id, call.message.message_id, reply_markup=keyboard_category)
     # Обработка подписки на бота
     elif call.data == 'key1':
@@ -93,12 +103,49 @@ def callback(call):
     # Обработка запуска парсера
     elif call.data == 'key3':
         keyboard_category = types.InlineKeyboardMarkup(row_width=1)
-        keyboard_category.add(types.InlineKeyboardButton('Назад', callback_data='key0'))
-        
-        deleted_count, _ = TelegramSubscriber.objects.filter(chat_id=chat_id).delete()
-        message_text = "Запуск парсера"
-        bot.edit_message_text(message_text, chat_id, call.message.message_id, reply_markup=keyboard_category)
+        keyboard_category.add(
+            types.InlineKeyboardButton('Запустить парсер', callback_data='key3'),
+            types.InlineKeyboardButton('Назад', callback_data='key0')
+            )
+        bot.edit_message_text("⏳ Запуск парсера...", chat_id, call.message.message_id, reply_markup=keyboard_category)
 
+        result = parsing.apply(kwargs={"mode": "manual"}).get(timeout=60)
+        if not result:
+            result = {"ok": False, "message": "❌ Ошибка при выполнении парсинга"}
+
+
+        message_text = result.get("message", "❌ Неизвестная ошибка")
+        final_keyboard = types.InlineKeyboardMarkup(row_width=1)
+
+
+        # Добавляем кнопки, если есть
+        if result.get("ok") and result.get("buttons"):
+            for button_text, redis_key in result["buttons"]:
+                final_keyboard.add(types.InlineKeyboardButton(button_text, callback_data=redis_key))
+        else:
+            final_keyboard = keyboard_category  # fallback
+        bot.edit_message_text(message_text, chat_id, call.message.message_id, reply_markup=final_keyboard)
+        # message_text = "Запуск парсера..."
+        # bot.edit_message_text(message_text, chat_id, call.message.message_id, reply_markup=keyboard_category)
+        # parsing.delay(mode="manual", chat_id=call.message.chat.id, message_id=call.message.message_id)
+
+    # временная реализация парсинга конечных ссылок
+    if call.data.startswith("doc_link:"):
+        # Извлекаем ключ
+        redis_key = call.data
+        # Пытаемся получить URL из Redis
+
+        url = redis_client.get(redis_key)
+        if isinstance(url, bytes):
+            url = url.decode("utf-8")
+            print(f"🔗 Пользователь выбрал ссылку: {url}")
+            bot.answer_callback_query(call.id, text="Ссылка получена!")
+            bot.send_message(chat_id, f"🔗 Ссылка на документ:\n{url}")
+        else:
+            print(f"❌ Ключ {redis_key} не найден в Redis или устарел")
+            bot.answer_callback_query(call.id, text="⏰ Срок действия ссылки истёк.")
+            bot.send_message(chat_id, "❌ Ссылка устарела или не найдена.")
+        return  # выход, чтобы не продолжать дальше
 
 #запуск бота через supervisord
 def run_bot():
