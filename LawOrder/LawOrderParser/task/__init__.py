@@ -1,1 +1,1 @@
-from .sudact_parsing import parse_document
+# from .sudact_parsing import parse_document

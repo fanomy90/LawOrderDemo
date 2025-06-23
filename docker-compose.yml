@@ -47,7 +47,8 @@ services:
       PYTHONPATH: /yt
     volumes:
       # - /home/skiner/projects/LawOrderDemo/LawOrder/db.sqlite3:/yt/db.sqlite3
-      - /Users/user/Documents/projects/LawOrderDemo/LawOrder/db.sqlite3:/yt/db.sqlite3
+      - /home/skiner/projects/09062025/LawOrderDemo/LawOrder/db.sqlite3:/yt/db.sqlite3
+      #- /Users/user/Documents/projects/LawOrderDemo/LawOrder/db.sqlite3:/yt/db.sqlite3
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
       - static_volume:/yt/static

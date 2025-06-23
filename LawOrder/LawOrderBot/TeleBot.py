@@ -6,8 +6,8 @@ import requests
 import datetime
 import django
 
-from LawOrderParser.tasks import parsing
-from LawOrderParser.task.sudact_parsing import parse_document
+from LawOrderParser.tasks import parsing, test_read_redis_key, parsing_doc_task
+# from LawOrderParser.task.sudact_parsing import parse_document
 
 # для редиски
 import uuid
@@ -129,23 +129,100 @@ def callback(call):
         # bot.edit_message_text(message_text, chat_id, call.message.message_id, reply_markup=keyboard_category)
         # parsing.delay(mode="manual", chat_id=call.message.chat.id, message_id=call.message.message_id)
 
+    # Обработка запуска загрузки документа в БД
+    # elif call.data == 'key4':
+    #     keyboard_category = types.InlineKeyboardMarkup(row_width=1)
+    #     keyboard_category.add(
+    #         types.InlineKeyboardButton('Назад', callback_data='key0')
+    #         )
+    #     bot.edit_message_text("⏳ Загрузка документа в БД...", chat_id, call.message.message_id, reply_markup=keyboard_category)
+    #     result = import_doc.apply(kwargs={"redis_key": redis_key}).get(timeout=60)
+
     # временная реализация парсинга конечных ссылок
     if call.data.startswith("doc_link:"):
         # Извлекаем ключ
         redis_key = call.data
-        # Пытаемся получить URL из Redis
 
-        url = redis_client.get(redis_key)
-        if isinstance(url, bytes):
-            url = url.decode("utf-8")
-            print(f"🔗 Пользователь выбрал ссылку: {url}")
-            bot.answer_callback_query(call.id, text="Ссылка получена!")
-            bot.send_message(chat_id, f"🔗 Ссылка на документ:\n{url}")
+        keyboard_category = types.InlineKeyboardMarkup(row_width=1)
+        keyboard_category.add(
+            # types.InlineKeyboardButton('Загрузить в БД', callback_data='key4'),
+            types.InlineKeyboardButton('Назад', callback_data='key0')
+            )
+        bot.edit_message_text("⏳ Запуск парсера документа тест ключа...", chat_id, call.message.message_id, reply_markup=keyboard_category)
+        result = test_read_redis_key.apply(kwargs={"redis_key": redis_key}).get(timeout=60)
+
+        final_keyboard = types.InlineKeyboardMarkup(row_width=1)
+        if not result:
+            message_text = "❌ Ошибка при выполнении парсинга документа (тест ключа редис)"
+            final_keyboard.add(types.InlineKeyboardButton("Повторить парсинг документа", callback_data=f"{redis_key}"))
+        if result.get("ok") and result.get("url"):
+            message_text = f"из редис получена ссылка {result['url']} по ключу {redis_key}"
+            final_keyboard.add(types.InlineKeyboardButton("Загрузить в БД", callback_data=f"parsing_{redis_key}"))
         else:
-            print(f"❌ Ключ {redis_key} не найден в Redis или устарел")
-            bot.answer_callback_query(call.id, text="⏰ Срок действия ссылки истёк.")
-            bot.send_message(chat_id, "❌ Ссылка устарела или не найдена.")
-        return  # выход, чтобы не продолжать дальше
+            message_text = f"❌ Ошибка при выполнении парсинга документа: {result['message']}"
+            # message_text = f"✅ Из Redis получена ссылка: {result['value']}\nКлюч: {redis_key}"
+            final_keyboard.add(types.InlineKeyboardButton("Повторить парсинг документа", callback_data=f"{redis_key}"))
+        bot.edit_message_text(message_text, chat_id, call.message.message_id, reply_markup=final_keyboard)
+
+    # временная обработка парсинга документа
+    # if call.data.startswith("parsing_doc_link:"):
+    #     # Извлекаем ключ
+    #     redis_key = call.data.split('parsing_')[1]
+    #     # redis_key = call.data
+    #     keyboard_category = types.InlineKeyboardMarkup(row_width=1)
+    #     keyboard_category.add(
+    #         # types.InlineKeyboardButton('Загрузить в БД', callback_data='key4'),
+    #         types.InlineKeyboardButton('Назад', callback_data='key0')
+    #         )
+    #     bot.edit_message_text("⏳ Запуск импорта документа в БД...", chat_id, call.message.message_id, reply_markup=keyboard_category)
+    #     result = parsing_doc_task.apply(kwargs={"redis_key": redis_key}).get(timeout=60)
+    #     final_keyboard = types.InlineKeyboardMarkup(row_width=1)
+    #     if not result:
+    #         message_text = "❌ Ошибка при выполнении парсинга документа (перед импортом)"
+    #         final_keyboard.add(types.InlineKeyboardButton("Повторить парсинг документа", callback_data=f"parsing_{redis_key}"))
+    #     if result.get("ok") and result.get("doc"):
+    #         redis_key = result['doc']
+    #         message_text = f"Получен документ для импорта"
+    #         final_keyboard.add(types.InlineKeyboardButton("Импортировать документ в БД", callback_data=f"import_{redis_key}"))
+    #     bot.edit_message_text(message_text, chat_id, call.message.message_id, reply_markup=final_keyboard)
+
+    if call.data.startswith("parsing_doc_link:"):
+        redis_key = call.data.split('parsing_')[1]
+        
+        keyboard_category = types.InlineKeyboardMarkup(row_width=1)
+        keyboard_category.add(
+            types.InlineKeyboardButton('Назад', callback_data='key0')
+        )
+    
+        bot.edit_message_text("⏳ Парсинг документа...", chat_id, call.message.message_id, reply_markup=keyboard_category)
+    
+        result = parsing_doc_task.apply(kwargs={"redis_key": redis_key}).get(timeout=60)
+    
+        final_keyboard = types.InlineKeyboardMarkup(row_width=1)
+        message_text = ""
+    
+        if not result:
+            message_text = "❌ Не удалось выполнить задачу парсинга"
+            final_keyboard.add(types.InlineKeyboardButton("Повторить", callback_data=f"parsing_{redis_key}"))
+        elif not result.get("ok"):
+            message_text = f"❌ Ошибка: {result.get('message')}"
+            final_keyboard.add(types.InlineKeyboardButton("Повторить", callback_data=f"parsing_{redis_key}"))
+        else:
+            headings = result.get("headings", [])
+            url = result.get("url", "")
+    
+            message_text = f"✅ Заголовки из документа:\n\n"
+            if headings:
+                for i, h in enumerate(headings, 1):
+                    message_text += f"{i}. {h}\n"
+            else:
+                message_text += "Не найдено ни одного заголовка h1-h3."
+    
+            final_keyboard.add(types.InlineKeyboardButton("Импортировать в БД", callback_data=f"import_{redis_key}"))
+    
+        bot.edit_message_text(message_text, chat_id, call.message.message_id, reply_markup=final_keyboard)
+
+
 
 #запуск бота через supervisord
 def run_bot():

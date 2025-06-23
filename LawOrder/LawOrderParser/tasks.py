@@ -12,10 +12,9 @@ import django
 # для редиски
 import uuid
 import redis
-import time
 from LawOrderParser.utils.redis_client import redis_client
-from LawOrderParser.task.sudact_parsing import parse_document
-
+# from LawOrderParser.task.sudact_parsing import parse_document
+from LawOrderParser.task.sudact_parsing_doc import parse_document
 
 # Подключение к Redis
 r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
@@ -38,66 +37,6 @@ def get_temp_link(key):
     else:
         print(f"Ссылка по ключу {key} не найдена или истекла")
     return url
-
-# @shared_task
-# def parsing():
-#     logger.info("Начало выполнения задачи parsing")
-#     try:
-#         sudact_find()
-#         logger.info("Задача parsing выполнена успешно")
-#     except Exception as e:
-#         logger.error(f"Ошибка выполнения задачи parsing: {e}")
-#         raise
-
-# @shared_task(bind=True)
-# def parsing(self, mode="manual", chat_id=None, message_id=None):
-#     from LawOrderParser.task.sudact_parsing import sudact_find
-#     from telebot import types, TeleBot
-
-#     # переделать указание токена через env файл
-#     bot = TeleBot("7300227909:AAFLLNA14mxVCk5RvjP-LHc05yDO7dANKj4")
-
-#     # Подготовим клавиатуру заранее
-#     keyboard_category = types.InlineKeyboardMarkup(row_width=1)
-#     keyboard_category.add(
-#         types.InlineKeyboardButton('Запустить парсер', callback_data='key3'),
-#         types.InlineKeyboardButton('Назад', callback_data='key0'))
-
-#     message_text = "❌ Неизвестная ошибка."
-    
-#     try:
-#         logger.info(f"Целевая задача parsing запущена. mode={mode}")
-#         result, parsed_items = sudact_find(mode=mode)
-#         # исключение когда нет данных страницы поиска
-#         if not parsed_items:
-#             message_text = "❌ Ничего не найдено."
-#             return
-
-#         # message_text = f"✅ Парсинг завершен:\n\n{result}"
-#         message_text = f"✅ Парсинг завершен:\n\n Выберите документ для анализа"
-#         #добавим кнопки с ссылками
-#         for item in parsed_items:
-#             button_text = f"№{item['number']}: {item['title'][:50]}"
-#             # Сохраняем ссылку в Redis
-#             key = f"doc_link:{uuid.uuid4()}"
-#             redis_client.setex(key, 300, item['url'])  # TTL 5 минут
-#             # по слову open_link будем ловить телеботом ссылки для парсинга конечных страниц
-#             # callback_data = f"open_link:{key}"
-#             keyboard_category.add(
-#                 types.InlineKeyboardButton(button_text, callback_data=key))
-
-#     except Exception as e:
-#         logger.error(f"Ошибка: {e}")
-#         message_text = f"❌ Ошибка при парсинге:\n{e}"
-#         raise
-
-#     if chat_id and message_id:
-#         bot.edit_message_text(
-#             message_text,
-#             chat_id,
-#             message_id,
-#             reply_markup=keyboard_category
-#         )
 
 @shared_task(bind=True)
 def parsing(self, mode="manual"):
@@ -133,3 +72,47 @@ def parsing(self, mode="manual"):
     except Exception as e:
         print(f"❌ Ошибка при парсинге: {str(e)}")
         return {"ok": False, "message": f"❌ Ошибка при парсинге: {str(e)}"}
+
+@shared_task(bind=True)
+def test_read_redis_key(self, redis_key):
+    try:
+        print(f"🧪 Получен ключ: {redis_key}")
+        value = redis_client.get(redis_key)
+
+        if value is None:
+            print(f"❌ Ключ {redis_key} не найден или устарел.")
+            return {"ok": False, "message": f"❌ Ключ {redis_key} не найден в Redis."}
+
+        decoded_value = value.decode() if isinstance(value, bytes) else value
+        print(f"✅ Значение по ключу: {decoded_value}")
+        return {"ok": True, "url": decoded_value, "redis_key": redis_key}
+
+    except Exception as e:
+        print(f"❌ Ошибка в тестовой задаче: {str(e)}")
+        return {"ok": False, "message": f"❌ Ошибка: {str(e)}"}
+
+# @shared_task(bind=True)
+# def parsing_doc_task(self, redis_key, mode="manual"):
+#     try:
+#         print(f"🧪 Получен ключ: {redis_key}")
+#         value = redis_client.get(redis_key)
+
+#         if value is None:
+#             print(f"❌ Ключ {redis_key} не найден или устарел.")
+#             return {"ok": False, "message": f"❌ Ключ {redis_key} не найден в Redis."}
+#         decoded_value = value.decode() if isinstance(value, bytes) else value
+#         # запускаем парсинг документа
+#         document = parse_document(decoded_value, mode=mode)
+        
+#         return "doc"
+#     except Exception as e:
+#         print(f"❌ Ошибка в тестовой задаче: {str(e)}")
+#         return {"ok": False, "message": f"❌ Ошибка: {str(e)}"}
+
+@shared_task(bind=True)
+def parsing_doc_task(self, redis_key, mode="manual"):
+    try:
+        result = parse_document(redis_key, mode=mode)
+        return result
+    except Exception as e:
+        return {"ok": False, "message": f"❌ Ошибка: {str(e)}"}
